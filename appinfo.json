@@ -1,7 +1,10 @@
 {
-    "appKeys": {},
+    "appKeys": {
+        "KEY_STATUS": 0,
+        "KEY_THEME": 1
+    },
     "capabilities": [
-        ""
+        "configurable"
     ],
     "companyName": "juanvvc@gmail.com",
     "longName": "FourSliders",
