@@ -1,7 +1,7 @@
 Pebble.addEventListener('showConfiguration', function(e) {
   // Show config page
-  Pebble.openURL('http://127.0.0.1/foursliders.html');
-  //Pebble.openURL('https://dl.dropboxusercontent.com/u/13130748/pebble/foursliders.html');
+  //Pebble.openURL('http://127.0.0.1/foursliders.html');
+  Pebble.openURL('https://dl.dropboxusercontent.com/u/13130748/pebble/foursliders.html');
 });
 
 Pebble.addEventListener("webviewclosed",

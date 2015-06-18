@@ -78,7 +78,7 @@ static void load_theme(int theme) {
   switch(theme) {
   case 1: // green theme
   color_border = GColorDarkGreen;
-  color_text = color_lines = GColorBrass;
+  color_text = color_lines = GColorArmyGreen;
   color_back = GColorPastelYellow;
   color_bt = GColorVividCerulean;
   color_warning = GColorRed;
@@ -231,7 +231,7 @@ static void update_layer_hour(struct Layer *layer, GContext *ctx) {
   for(int i=-1; i<DAY_SEGMENTS + 1; i++) {    
     x = -offset + i * MONTH_WIDTH + 72;
     if ( x > 4 && x < 140 ) {
-      graphics_draw_line(ctx, GPoint(x,153), GPoint(x,158));
+      graphics_draw_line(ctx, GPoint(x,152), GPoint(x,156));
     }
     // text
     graphics_draw_text(
@@ -259,7 +259,7 @@ static void update_layer_hour(struct Layer *layer, GContext *ctx) {
     } else {
       graphics_context_set_fill_color(ctx, color_border);
     }
-    if ( battery_state_service_peek().charge_percent < 20 ) {
+    if ( battery_state_service_peek().charge_percent < 25 ) {
       graphics_context_set_fill_color(ctx, color_warning);
     }
   }
