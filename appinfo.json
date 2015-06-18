@@ -1,0 +1,34 @@
+{
+    "appKeys": {},
+    "capabilities": [
+        ""
+    ],
+    "companyName": "juanvvc@gmail.com",
+    "longName": "FourSliders",
+    "projectType": "native",
+    "resources": {
+        "media": [
+            {
+                "file": "fonts/MyLilGrotesk-Regular.ttf",
+                "name": "FONT_TIME_14",
+                "type": "font"
+            },
+            {
+                "file": "fonts/MyLilGrotesk-Regular.ttf",
+                "name": "FONT_TIME_48",
+                "type": "font"
+            }
+        ]
+    },
+    "sdkVersion": "3",
+    "shortName": "FourSliders",
+    "targetPlatforms": [
+        "aplite",
+        "basalt"
+    ],
+    "uuid": "55a983d9-0cd6-43c6-bd77-66ee5d735aab",
+    "versionLabel": "1.0",
+    "watchapp": {
+        "watchface": true
+    }
+}
