@@ -27,7 +27,8 @@ Window *s_main_window;
 static Layer *s_layer_hour;
 static GFont s_time_font;
 static GFont s_time_small_font;
-static GPath *s_mark;
+static GPath *s_mark_border;
+static GPath *s_mark_inner;
   
 static char *hours[] = { "12", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"};
 static char *weekdays[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
@@ -41,19 +42,28 @@ static GColor color_lines;
 static GColor color_back;
 static GColor color_text;
 static GColor color_bt;
+static GColor color_bt_off;
 static GColor color_warning;
+static GColor color_warning_off;
 static bool hide_status = false;
+static bool centered_hour = false;
 
 // the mark
-static const GPathInfo MARK_INFO = {
+static const GPathInfo MARK_BORDER_INFO = {
   .num_points = 3,
   .points = (GPoint []) {{0,0}, {-12, -14}, {12, -14}}
 };
+static const GPathInfo MARK_INNER_INFO = {
+  .num_points = 4,
+  .points = (GPoint []) {{-10,0}, {0, -12}, {10, 0}, {0, 12}}
+};
+
 
 // configuration received from the remote server
 enum CommunicationKey {
   KEY_STATUS = 0x0,
-  KEY_THEME = 0x1
+  KEY_THEME = 0x1,
+  KEY_HOUR_CENTERED = 0x2
 };
 
 // returns the number of days of a month (0-11), in the range 1-31
@@ -77,27 +87,30 @@ static void load_theme(int theme) {
 #ifdef PBL_COLOR
   switch(theme) {
   case 1: // green theme
-  color_border = GColorDarkGreen;
+  color_border = color_warning_off = GColorDarkGreen;
   color_text = color_lines = GColorArmyGreen;
   color_back = GColorPastelYellow;
   color_bt = GColorVividCerulean;
   color_warning = GColorRed;
+  color_bt_off = GColorBlack;
   break;
   
   case 2: // blue theme
-  color_border = GColorOxfordBlue;
+  color_border = color_warning_off = GColorOxfordBlue;
   color_text = color_lines = GColorWhite;
   color_back = GColorCobaltBlue;
   color_bt = GColorVividCerulean;
   color_warning = GColorRed;
+  color_bt_off = GColorBlack;
   break;
   
   case 3: // red
-  color_border = GColorDarkCandyAppleRed;
+  color_border = color_warning_off = GColorDarkCandyAppleRed;
   color_text = color_lines = GColorBlack;
   color_back = GColorMelon;
   color_bt = GColorVividCerulean;
-  color_warning = GColorRed;
+  color_bt_off = GColorBlack;
+  color_warning = GColorWhite;
   break;  
   
   default:
@@ -105,11 +118,13 @@ static void load_theme(int theme) {
   color_back = GColorWhite;
   color_bt = GColorVividCerulean;
   color_warning = GColorRed;
+  color_bt_off = color_warning_off = GColorBlack;
   }
   persist_write_int(KEY_THEME, theme);
 #else
   color_border = color_text = color_lines = color_bt = GColorBlack;
   color_back = color_warning = GColorWhite;
+  color_bt_off = color_warning_off = GColorBlack;
 #endif
 }
 
@@ -160,8 +175,8 @@ static void update_layer_hour(struct Layer *layer, GContext *ctx) {
     // hour line
     x = HOUR_HALF_WIDTH - offset + i * HOUR_WIDTH;
     if ( x > 4 && x < 140 ) {
-      graphics_draw_line(ctx, GPoint(x,5), GPoint(x,25));
-      graphics_draw_line(ctx, GPoint(x+1,5), GPoint(x+1,25)); // double line
+      graphics_draw_line(ctx, GPoint(x,6), GPoint(x,26));
+      graphics_draw_line(ctx, GPoint(x+1,6), GPoint(x+1,26)); // double line
       graphics_draw_line(ctx, GPoint(x,67), GPoint(x,87));
       graphics_draw_line(ctx, GPoint(x+1,67), GPoint(x+1,87)); // double line
     }
@@ -175,18 +190,18 @@ static void update_layer_hour(struct Layer *layer, GContext *ctx) {
     // half hour line
     x = -offset + i * HOUR_WIDTH;
     if ( x > 4 && x < 140 ) {
-      graphics_draw_line(ctx, GPoint(x,5), GPoint(x,20));
+      graphics_draw_line(ctx, GPoint(x,6), GPoint(x,21));
       graphics_draw_line(ctx, GPoint(x,71), GPoint(x,86));
     }
     // quarter hour lines
     x = HOUR_HALF_WIDTH - offset + i * HOUR_WIDTH - HOUR_QUARTER_WIDTH; 
     if ( x > 4 && x < 140 ) {
-      graphics_draw_line(ctx, GPoint(x,5), GPoint(x,15));
+      graphics_draw_line(ctx, GPoint(x,6), GPoint(x,16));
       graphics_draw_line(ctx, GPoint(x,76), GPoint(x,86));
     }
     x = HOUR_HALF_WIDTH - offset + i * HOUR_WIDTH + HOUR_QUARTER_WIDTH; 
     if ( x > 4 && x < 140 ) {
-      graphics_draw_line(ctx, GPoint(x,5), GPoint(x,15));
+      graphics_draw_line(ctx, GPoint(x,6), GPoint(x,16));
       graphics_draw_line(ctx, GPoint(x,76), GPoint(x,86));
     }
   }
@@ -249,42 +264,214 @@ static void update_layer_hour(struct Layer *layer, GContext *ctx) {
   graphics_draw_round_rect(ctx, GRect(4,130,136,34), 5);
   
   // draw marks
-  gpath_rotate_to(s_mark, 0);
-  // use colors to show information about bt and battery
-  if ( hide_status) {
-    graphics_context_set_fill_color(ctx, color_border);
-  } else {
-    if ( bluetooth_connection_service_peek() ) {
-      graphics_context_set_fill_color(ctx, color_bt);
-    } else {
-      graphics_context_set_fill_color(ctx, color_border);
-    }
-    if ( battery_state_service_peek().charge_percent < 25 ) {
-      graphics_context_set_fill_color(ctx, color_warning);
-    }
-  }
-  gpath_move_to(s_mark, GPoint(72,14));
-  gpath_draw_filled(ctx, s_mark);
+  gpath_rotate_to(s_mark_border, 0);
   graphics_context_set_fill_color(ctx, color_border);
-  gpath_move_to(s_mark, GPoint(72,14));
-  gpath_draw_outline(ctx, s_mark);
+  gpath_move_to(s_mark_border, GPoint(72,14));
+  gpath_draw_filled(ctx, s_mark_border);
+  gpath_move_to(s_mark_border, GPoint(72,14));
+  gpath_draw_outline(ctx, s_mark_border);
   //gpath_move_to(s_mark, GPoint(72,140));
-  //gpath_draw_filled(ctx, s_mark);
-  gpath_move_to(s_mark, GPoint(72,103));
-  gpath_draw_filled(ctx, s_mark);
-  gpath_draw_outline(ctx, s_mark);
-  gpath_rotate_to(s_mark, TRIG_MAX_ANGLE / 2);
-  gpath_move_to(s_mark, GPoint(72,79));
-  gpath_draw_filled(ctx, s_mark);
-  gpath_draw_outline(ctx, s_mark);
-  gpath_move_to(s_mark, GPoint(72,157));
-  gpath_draw_filled(ctx, s_mark);
-  gpath_draw_outline(ctx, s_mark);
+  //gpath_draw_filled(ctx, s_mark_border);
+  gpath_move_to(s_mark_border, GPoint(72,103));
+  gpath_draw_filled(ctx, s_mark_border);
+  gpath_draw_outline(ctx, s_mark_border);
+  gpath_rotate_to(s_mark_border, TRIG_MAX_ANGLE / 2);
+  gpath_move_to(s_mark_border, GPoint(72,79));
+  gpath_draw_filled(ctx, s_mark_border);
+  gpath_draw_outline(ctx, s_mark_border);
+  gpath_move_to(s_mark_border, GPoint(72,157));
+  gpath_draw_filled(ctx, s_mark_border);
+  gpath_draw_outline(ctx, s_mark_border);
   // redraw borders, to overwrite numbers on the border
   graphics_context_set_fill_color(ctx, color_border);
   graphics_fill_rect(ctx, GRect(0,0,4,168), 0, GCornerNone);
   graphics_fill_rect(ctx, GRect(140,0,4,168), 0, GCornerNone);
   graphics_fill_rect(ctx, GRect(0,90,144,5), 0, GCornerNone);
+  // draw the inner marks
+  if ( !hide_status) {
+    if ( bluetooth_connection_service_peek() ) {
+      graphics_context_set_fill_color(ctx, color_bt);
+    } else {
+      graphics_context_set_fill_color(ctx, color_bt_off);
+    }
+    gpath_move_to(s_mark_inner, GPoint(72, 0));
+    gpath_draw_filled(ctx, s_mark_inner);
+    if ( battery_state_service_peek().charge_percent < 25 ) {
+      graphics_context_set_fill_color(ctx, color_warning);
+    } else {
+      graphics_context_set_fill_color(ctx, color_warning_off);
+    }
+    gpath_move_to(s_mark_inner, GPoint(72, 170));
+    gpath_draw_filled(ctx, s_mark_inner);
+  }
+}
+
+// updates the layer using centered hour
+static void update_layer_hour_centered(struct Layer *layer, GContext *ctx) {
+  int x;
+  time_t temp = time(NULL);
+  struct tm *tick_time = localtime(&temp);
+  int hour = tick_time->tm_hour;
+  int min = tick_time->tm_min;
+  int weekday = tick_time->tm_wday;
+  int day = tick_time->tm_mday -1;  // the rest of the code expects this starting at 0
+  int month = tick_time->tm_mon;
+  int year = tick_time->tm_year + 1900;
+  
+  // draw borders
+  graphics_context_set_fill_color(ctx, color_border);
+  graphics_fill_rect(ctx, GRect(0,0,144,168), 0, GCornerNone);
+  graphics_context_set_fill_color(ctx, color_back);
+  graphics_fill_rect(ctx, GRect(4,4,136,30), 5, GCornersAll);
+  graphics_fill_rect(ctx, GRect(4,39,136,86), 5, GCornersAll);
+  graphics_fill_rect(ctx, GRect(4,130,136,34), 5, GCornersAll);
+  graphics_draw_line(ctx, GPoint(0, 147), GPoint(144, 147));
+  
+  graphics_context_set_stroke_color(ctx, color_lines);
+  graphics_context_set_text_color(ctx, color_text);
+      
+  // TODO: from here, most of the offsets are not calculated but just "values that work"
+  
+  
+  // weekday
+  int offset = (WEEK_WIDTH * hour) / 24 - WEEK_WIDTH / 2;
+  for(int i=-1; i<WEEK_SEGMENTS + 1; i++) {
+    x = -offset + i * WEEK_WIDTH;
+    if ( x > 4 && x < 140 ) {
+      graphics_draw_line(ctx, GPoint(x,14), GPoint(x,21));
+    }
+    // text
+    graphics_draw_text(
+      ctx,
+      weekdays[abs((weekday - WEEK_SEGMENTS / 2 + i + 7) % 7)],
+      s_time_small_font,
+      GRect(x, 9, WEEK_WIDTH, 20),
+      GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+  }  
+  
+  // Hour
+  offset = (HOUR_WIDTH * min) / 60;
+  for(int i=0; i<HOUR_SEGMENTS + 1; i++) {
+    // hour line
+    x = HOUR_HALF_WIDTH - offset + i * HOUR_WIDTH;
+    if ( x > 4 && x < 140 ) {
+      graphics_draw_line(ctx, GPoint(x,41), GPoint(x,61));
+      graphics_draw_line(ctx, GPoint(x+1,41), GPoint(x+1,61)); // double line
+      graphics_draw_line(ctx, GPoint(x,102), GPoint(x,122));
+      graphics_draw_line(ctx, GPoint(x+1,102), GPoint(x+1,122)); // double line
+    }
+    // text
+    graphics_draw_text(
+      ctx,
+      hours[abs((hour + i + 11) % 12)],
+      s_time_font,
+      GRect(x - HOUR_HALF_WIDTH, 51, HOUR_WIDTH, 55),
+      GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+    // half hour line
+    x = -offset + i * HOUR_WIDTH;
+    if ( x > 4 && x < 140 ) {
+      graphics_draw_line(ctx, GPoint(x,41), GPoint(x,56));
+      graphics_draw_line(ctx, GPoint(x,107), GPoint(x,122));
+    }
+    // quarter hour lines
+    x = HOUR_HALF_WIDTH - offset + i * HOUR_WIDTH - HOUR_QUARTER_WIDTH; 
+    if ( x > 4 && x < 140 ) {
+      graphics_draw_line(ctx, GPoint(x,41), GPoint(x,51));
+      graphics_draw_line(ctx, GPoint(x,112), GPoint(x,122));
+    }
+    x = HOUR_HALF_WIDTH - offset + i * HOUR_WIDTH + HOUR_QUARTER_WIDTH; 
+    if ( x > 4 && x < 140 ) {
+      graphics_draw_line(ctx, GPoint(x,41), GPoint(x,51));
+      graphics_draw_line(ctx, GPoint(x,112), GPoint(x,122));
+    }
+  }
+  
+  // day
+  offset = (DAY_WIDTH * hour) / 24;
+  char *buffer = "XXX";
+  int show_day;
+  for(int i=-2; i<DAY_SEGMENTS + 1; i++) {
+    x = -offset + i * DAY_WIDTH + 72;
+    show_day = this_day_is(day, month, year, i);
+    if ( x > 4 && x < 140 ) {
+      graphics_draw_line(ctx, GPoint(x,135), GPoint(x,140));
+    }
+    // text
+    snprintf(buffer, 3, "%d", show_day + 1);
+    graphics_draw_text(
+      ctx,
+      buffer,
+      s_time_small_font,
+      GRect(x, 130, DAY_WIDTH, 20),
+      GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+  }
+  // month
+  offset = (MONTH_WIDTH * day ) / get_max_days(month, year);
+  for(int i=-1; i<DAY_SEGMENTS + 1; i++) {    
+    x = -offset + i * MONTH_WIDTH + 72;
+    if ( x > 4 && x < 140 ) {
+      graphics_draw_line(ctx, GPoint(x,152), GPoint(x,156));
+    }
+    // text
+    graphics_draw_text(
+      ctx,
+      months[(month + i + 12) % 12],
+      s_time_small_font,
+      GRect(x, 146, MONTH_WIDTH, 20),
+      GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+  }
+  
+  // draw borders, again
+  graphics_context_set_stroke_color(ctx, GColorBlack);
+  graphics_draw_round_rect(ctx, GRect(4,4,136,30), 5);
+  graphics_draw_round_rect(ctx, GRect(4,39,136,86), 5);
+  graphics_draw_round_rect(ctx, GRect(4,130,136,34), 5);
+    
+  // draw marks
+  gpath_rotate_to(s_mark_border, 0);
+  graphics_context_set_fill_color(ctx, color_border);
+  gpath_move_to(s_mark_border, GPoint(72,49));
+  gpath_draw_filled(ctx, s_mark_border);
+  gpath_draw_outline(ctx, s_mark_border);
+  gpath_move_to(s_mark_border, GPoint(72,139));
+  gpath_draw_filled(ctx, s_mark_border);
+  gpath_draw_outline(ctx, s_mark_border);
+  gpath_rotate_to(s_mark_border, TRIG_MAX_ANGLE / 2);
+  gpath_move_to(s_mark_border, GPoint(72,25));
+  gpath_draw_filled(ctx, s_mark_border);
+  gpath_draw_outline(ctx, s_mark_border);
+  gpath_move_to(s_mark_border, GPoint(72,114));
+  gpath_draw_filled(ctx, s_mark_border);
+  gpath_draw_outline(ctx, s_mark_border);
+  // redraw borders, to overwrite numbers on the border
+  graphics_context_set_fill_color(ctx, color_border);
+  graphics_fill_rect(ctx, GRect(0,0,4,168), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(140,0,4,168), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(0,34,144,5), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(0,125,144,5), 0, GCornerNone);
+  // draw the inner marks
+  if ( !hide_status) {
+    if ( bluetooth_connection_service_peek() ) {
+      graphics_context_set_fill_color(ctx, color_bt);
+    } else {
+      graphics_context_set_fill_color(ctx, color_bt_off);
+    }
+    gpath_move_to(s_mark_inner, GPoint(72, 37));
+    gpath_draw_filled(ctx, s_mark_inner);
+    if ( battery_state_service_peek().charge_percent < 25 ) {
+      graphics_context_set_fill_color(ctx, color_warning);
+    } else {
+      graphics_context_set_fill_color(ctx, color_warning_off);
+    }
+    gpath_move_to(s_mark_inner, GPoint(72, 127));
+    gpath_draw_filled(ctx, s_mark_inner);
+  } else {
+    graphics_context_set_fill_color(ctx, color_border);
+    gpath_move_to(s_mark_inner, GPoint(72, 37));
+    gpath_draw_filled(ctx, s_mark_inner);
+    gpath_move_to(s_mark_inner, GPoint(72, 127));
+    gpath_draw_filled(ctx, s_mark_inner);
+  }
 }
 
 static void update_time() {
@@ -313,9 +500,19 @@ static void in_recv_handler(DictionaryIterator *iterator, void *context) {
       }
       break;
       
+      case KEY_HOUR_CENTERED:
+      centered_hour = (strcmp(t->value->cstring, "Centered") == 0);
+      if ( centered_hour ) {
+        layer_set_update_proc(s_layer_hour, update_layer_hour_centered);
+      } else {
+        layer_set_update_proc(s_layer_hour, update_layer_hour);
+      }
+      persist_write_bool(KEY_HOUR_CENTERED, centered_hour);
+      break;
+      
       case KEY_STATUS:
       hide_status = (strcmp(t->value->cstring, "hide") == 0);
-      persist_write_int(KEY_STATUS, hide_status);
+      persist_write_bool(KEY_STATUS, hide_status);
       break;
     }
     t = dict_read_next(iterator);
@@ -326,12 +523,18 @@ static void in_recv_handler(DictionaryIterator *iterator, void *context) {
 static void main_window_load(Window *w) {
   load_theme(persist_read_int(KEY_THEME));
   hide_status = persist_read_bool(KEY_STATUS);
+  centered_hour = persist_read_bool(KEY_HOUR_CENTERED);
   s_time_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TIME_48));
   s_time_small_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TIME_14));
-  s_mark = gpath_create(&MARK_INFO);
+  s_mark_border = gpath_create(&MARK_BORDER_INFO);
+  s_mark_inner = gpath_create(&MARK_INNER_INFO);
   
   s_layer_hour = layer_create(GRect(0,0,144,168));
-  layer_set_update_proc(s_layer_hour, update_layer_hour);
+  if ( centered_hour ) {
+    layer_set_update_proc(s_layer_hour, update_layer_hour_centered);
+  } else {
+    layer_set_update_proc(s_layer_hour, update_layer_hour);
+  }
   layer_add_child(window_get_root_layer(w), s_layer_hour);
 }
 
@@ -339,7 +542,8 @@ static void main_window_unload(Window *w) {
   layer_destroy(s_layer_hour);
   fonts_unload_custom_font(s_time_font);
   fonts_unload_custom_font(s_time_small_font);
-  gpath_destroy(s_mark);
+  gpath_destroy(s_mark_border);
+  gpath_destroy(s_mark_inner);
 }
 
 void init(void) {

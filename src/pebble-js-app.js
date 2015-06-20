@@ -17,7 +17,8 @@ Pebble.addEventListener("webviewclosed",
     //Send to Pebble, persist there
     Pebble.sendAppMessage(
       {"KEY_THEME": configuration.theme,
-       "KEY_STATUS": configuration.status},
+       "KEY_STATUS": configuration.status,
+       "KEY_HOUR_CENTERED": configuration.hour},
       function(e) {
         console.log("Sending settings data...");
       },

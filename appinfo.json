@@ -1,5 +1,6 @@
 {
     "appKeys": {
+        "KEY_HOUR_CENTERED": 2,
         "KEY_STATUS": 0,
         "KEY_THEME": 1
     },
@@ -30,7 +31,7 @@
         "basalt"
     ],
     "uuid": "55a983d9-0cd6-43c6-bd77-66ee5d735aab",
-    "versionLabel": "1.0",
+    "versionLabel": "1.1",
     "watchapp": {
         "watchface": true
     }
